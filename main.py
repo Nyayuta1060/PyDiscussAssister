@@ -8,6 +8,7 @@ import subprocess
 import whisper
 from datetime import datetime
 from tkinter import filedialog, messagebox, ttk
+import shutil
 
 
 class AudioRecorder:
@@ -83,6 +84,16 @@ class PyDiscussAssister:
         self.record_frame = ttk.LabelFrame(self.main_frame, text="録音", padding="10")
         self.record_frame.pack(fill=tk.X, pady=5)
         
+        # 録音セクションのヘッダーフレーム
+        self.record_header_frame = ttk.Frame(self.record_frame)
+        self.record_header_frame.pack(fill=tk.X, pady=5)
+        
+        # 全消しボタン
+        self.clear_all_button = ttk.Button(self.record_header_frame,
+                                         text="全消し",
+                                         command=self.clear_all_records)
+        self.clear_all_button.pack(side=tk.RIGHT, padx=5)
+        
         self.record_button = tk.Button(self.record_frame, 
                                      text="録音開始", 
                                      command=self.toggle_recording,
@@ -130,6 +141,13 @@ class PyDiscussAssister:
                                     command=self.save_to_file, 
                                     state=tk.DISABLED)
         self.save_button.pack(side=tk.LEFT, padx=5)
+
+        # ファイル削除ボタン
+        self.delete_button = ttk.Button(self.button_frame,
+                                        text="ファイルを削除する",
+                                        command=self.delete_file,
+                                        state=tk.DISABLED)
+        self.delete_button.pack(side=tk.LEFT,padx=10)
         
         # 結果表示用テキストボックス
         self.result_text = tk.Text(self.transcribe_frame, height=15, width=50)
@@ -178,7 +196,7 @@ class PyDiscussAssister:
 
         try:
             self.result_text.delete(1.0, tk.END)
-            self.result_text.insert(tk.END, "文字起こしを開始しています...\n")
+            self.result_text.insert(tk.END, "文字起こしを実行しています...\n")
             self.root.update()
 
             if not self.model:
@@ -214,12 +232,61 @@ class PyDiscussAssister:
             except Exception as e:
                 messagebox.showerror("エラー", f"ファイルの保存中にエラーが発生しました: {str(e)}")
 
+    def delete_file(self):
+        if not self.current_audio_file:
+            messagebox.showerror("エラー", "削除するファイルが選択されていません")
+            return
+
+        # 確認ダイアログを表示
+        confirm = messagebox.askyesno("確認", "本当にファイルを削除しますか？")
+        
+        if confirm:
+            try:
+                # ファイルが存在するディレクトリを取得
+                target_dir = os.path.dirname(self.current_audio_file)
+                
+                # ファイルを削除
+                if os.path.exists(self.current_audio_file):
+                    os.remove(self.current_audio_file)
+                
+                # ディレクトリが空の場合、ディレクトリも削除
+                if not os.listdir(target_dir):
+                    os.rmdir(target_dir)
+                
+                # 現在のファイル情報をクリア
+                self.current_audio_file = None
+                self.file_path_label.config(text="選択されたファイル: なし")
+                self.transcribe_button.config(state=tk.DISABLED)
+                self.save_button.config(state=tk.DISABLED)
+                self.result_text.delete(1.0, tk.END)
+                self.transcription_result = None
+                
+                messagebox.showinfo("成功", "ファイルを削除しました")
+            except Exception as e:
+                messagebox.showerror("エラー", f"ファイルの削除中にエラーが発生しました: {str(e)}")
+
     def check_ffmpeg(self):
         try:
             subprocess.run(['ffmpeg', '-version'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
             return True
         except FileNotFoundError:
             return False
+
+    def clear_all_records(self):
+        # 確認ダイアログを表示
+        confirm = messagebox.askyesno("確認", "本当に全ての録音ファイルを削除しますか？")
+        
+        if confirm:
+            try:
+                target_dir = 'records'
+                if os.path.exists(target_dir):
+                    shutil.rmtree(target_dir)
+                    os.mkdir(target_dir)
+                    messagebox.showinfo("成功", "全ての録音ファイルを削除しました")
+                else:
+                    messagebox.showinfo("情報", "削除する録音ファイルはありません")
+            except Exception as e:
+                messagebox.showerror("エラー", f"ファイルの削除中にエラーが発生しました: {str(e)}")
 
 if __name__ == "__main__":
     root = tk.Tk()
