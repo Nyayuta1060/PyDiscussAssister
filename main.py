@@ -1,14 +1,14 @@
 import tkinter as tk
-import pyaudio
-import wave
+from tkinter import filedialog, messagebox, ttk
+from datetime import datetime
 import threading
+import wave
 import time
 import os
 import subprocess
-import whisper
-from datetime import datetime
-from tkinter import filedialog, messagebox, ttk
 import shutil
+import pyaudio
+import whisper
 
 
 class AudioRecorder:
@@ -20,24 +20,20 @@ class AudioRecorder:
         self.CHANNELS = 1
         self.RATE = 44100
         self.p = pyaudio.PyAudio()
-        
-        # recordsフォルダが存在しない場合は作成
-        if not os.path.exists('records'):
-            os.makedirs('records')
+        os.makedirs('records', exist_ok=True)
 
     def start_recording(self):
         self.recording = True
         self.frames = []
         self.stream = self.p.open(format=self.FORMAT,
-                                channels=self.CHANNELS,
-                                rate=self.RATE,
-                                input=True,
-                                frames_per_buffer=self.CHUNK)
-        
+                                  channels=self.CHANNELS,
+                                  rate=self.RATE,
+                                  input=True,
+                                  frames_per_buffer=self.CHUNK)
+
         def record():
             while self.recording:
-                data = self.stream.read(self.CHUNK)
-                self.frames.append(data)
+                self.frames.append(self.stream.read(self.CHUNK))
 
         self.recording_thread = threading.Thread(target=record)
         self.recording_thread.start()
@@ -47,116 +43,88 @@ class AudioRecorder:
         self.recording_thread.join()
         self.stream.stop_stream()
         self.stream.close()
-        
-        # フォルダを作成
-        current_time = datetime.now().strftime('%Y%m%d_%H%M%S')
-        record_dir = os.path.join('records', current_time)
+
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        record_dir = os.path.join('records', timestamp)
         os.makedirs(record_dir, exist_ok=True)
-        
-        # 録音ファイルを保存
-        filename = os.path.join(record_dir, 'record.wav')
-        
-        wf = wave.open(filename, 'wb')
-        wf.setnchannels(self.CHANNELS)
-        wf.setsampwidth(self.p.get_sample_size(self.FORMAT))
-        wf.setframerate(self.RATE)
-        wf.writeframes(b''.join(self.frames))
-        wf.close()
-        
-        return filename
+
+        filepath = os.path.join(record_dir, 'record.wav')
+        with wave.open(filepath, 'wb') as wf:
+            wf.setnchannels(self.CHANNELS)
+            wf.setsampwidth(self.p.get_sample_size(self.FORMAT))
+            wf.setframerate(self.RATE)
+            wf.writeframes(b''.join(self.frames))
+
+        return filepath
+
 
 class PyDiscussAssister:
     def __init__(self, root):
         self.root = root
         self.root.title("PyDiscussAssister")
         self.root.geometry("600x500")
-        
+        self._set_icon()
+
         self.recorder = AudioRecorder()
         self.model = None
         self.transcription_result = None
         self.current_audio_file = None
-        
-        # メインフレーム
-        self.main_frame = ttk.Frame(root, padding="10")
+
+        self._build_ui()
+
+    def _set_icon(self):
+        try:
+            self.root.iconbitmap('icon.ico')
+        except:
+            messagebox.showwarning("警告", "アイコンファイルが見つかりません")
+
+    def _build_ui(self):
+        self.main_frame = ttk.Frame(self.root, padding="10")
         self.main_frame.pack(fill=tk.BOTH, expand=True)
-        
-        # 録音セクション
-        self.record_frame = ttk.LabelFrame(self.main_frame, text="録音", padding="10")
-        self.record_frame.pack(fill=tk.X, pady=5)
-        
-        # 録音セクションのヘッダーフレーム
-        self.record_header_frame = ttk.Frame(self.record_frame)
-        self.record_header_frame.pack(fill=tk.X, pady=5)
-        
-        # 全消しボタン
-        self.clear_all_button = ttk.Button(self.record_header_frame,
-                                         text="全消し",
-                                         command=self.clear_all_records)
-        self.clear_all_button.pack(side=tk.RIGHT, padx=5)
-        
-        self.record_button = tk.Button(self.record_frame, 
-                                     text="録音開始", 
-                                     command=self.toggle_recording,
-                                     bg='#4CAF50',
-                                     fg='white',
-                                     font=('Arial', 12),
-                                     width=15,
-                                     height=2)
+
+        self._build_record_ui()
+        self._build_transcribe_ui()
+
+    def _build_record_ui(self):
+        frame = ttk.LabelFrame(self.main_frame, text="録音", padding="10")
+        frame.pack(fill=tk.X, pady=5)
+
+        header_frame = ttk.Frame(frame)
+        header_frame.pack(fill=tk.X, pady=5)
+
+        ttk.Button(header_frame, text="全消し", command=self.clear_all_records).pack(side=tk.RIGHT, padx=5)
+
+        self.record_button = tk.Button(frame, text="録音開始", command=self.toggle_recording,
+                                       bg='#4CAF50', fg='white', font=('Arial', 12), width=15, height=2)
         self.record_button.pack(pady=10)
-        
-        self.status_label = tk.Label(self.record_frame, 
-                                   text="準備完了", 
-                                   font=('Arial', 10))
+
+        self.status_label = tk.Label(frame, text="準備完了", font=('Arial', 10))
         self.status_label.pack(pady=5)
-        
-        # 文字起こしセクション
-        self.transcribe_frame = ttk.LabelFrame(self.main_frame, text="文字起こし", padding="10")
-        self.transcribe_frame.pack(fill=tk.X, pady=5)
-        
-        # ファイル選択ボタン
-        self.select_button = ttk.Button(self.transcribe_frame, 
-                                      text="音声ファイルを選択", 
-                                      command=self.select_file)
-        self.select_button.pack(pady=5)
-        
-        # ファイルパス表示
-        self.file_path_label = ttk.Label(self.transcribe_frame, 
-                                       text="選択されたファイル: なし")
+
+    def _build_transcribe_ui(self):
+        frame = ttk.LabelFrame(self.main_frame, text="文字起こし", padding="10")
+        frame.pack(fill=tk.X, pady=5)
+
+        ttk.Button(frame, text="音声ファイルを選択", command=self.select_file).pack(pady=5)
+        self.file_path_label = ttk.Label(frame, text="選択されたファイル: なし")
         self.file_path_label.pack(pady=5)
-        
-        # ボタンフレーム
-        self.button_frame = ttk.Frame(self.transcribe_frame)
-        self.button_frame.pack(pady=5)
-        
-        # 文字起こしボタン
-        self.transcribe_button = ttk.Button(self.button_frame, 
-                                          text="文字起こしを開始", 
-                                          command=self.transcribe, 
-                                          state=tk.DISABLED)
+
+        btn_frame = ttk.Frame(frame)
+        btn_frame.pack(pady=5)
+
+        self.transcribe_button = ttk.Button(btn_frame, text="文字起こしを開始", command=self.transcribe, state=tk.DISABLED)
         self.transcribe_button.pack(side=tk.LEFT, padx=5)
-        
-        # テキストファイル保存ボタン
-        self.save_button = ttk.Button(self.button_frame, 
-                                    text="テキストファイルに保存", 
-                                    command=self.save_to_file, 
-                                    state=tk.DISABLED)
+
+        self.save_button = ttk.Button(btn_frame, text="テキストファイルに保存", command=self.save_to_file, state=tk.DISABLED)
         self.save_button.pack(side=tk.LEFT, padx=5)
 
-        # ファイル削除ボタン
-        self.delete_button = ttk.Button(self.button_frame,
-                                        text="ファイルを削除する",
-                                        command=self.delete_file,
-                                        state=tk.DISABLED)
-        self.delete_button.pack(side=tk.LEFT,padx=10)
-        
-        # 結果表示用テキストボックス
-        self.result_text = tk.Text(self.transcribe_frame, height=15, width=50)
+        self.delete_button = ttk.Button(btn_frame, text="ファイルを削除する", command=self.delete_file, state=tk.DISABLED)
+        self.delete_button.pack(side=tk.LEFT, padx=10)
+
+        self.result_text = tk.Text(frame, height=15, width=50)
         self.result_text.pack(pady=5)
-        
-        # スクロールバー
-        scrollbar = ttk.Scrollbar(self.transcribe_frame, 
-                                orient=tk.VERTICAL, 
-                                command=self.result_text.yview)
+
+        scrollbar = ttk.Scrollbar(frame, orient=tk.VERTICAL, command=self.result_text.yview)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         self.result_text['yscrollcommand'] = scrollbar.set
 
@@ -173,10 +141,8 @@ class PyDiscussAssister:
             self.transcribe_button.config(state=tk.NORMAL)
 
     def select_file(self):
-        file_path = filedialog.askopenfilename(
-            title="音声ファイルを選択",
-            filetypes=[("音声ファイル", "*.wav *.mp3 *.m4a")]
-        )
+        file_path = filedialog.askopenfilename(title="音声ファイルを選択",
+                                               filetypes=[("音声ファイル", "*.wav *.mp3 *.m4a")])
         if file_path:
             self.current_audio_file = file_path
             self.file_path_label.config(text=f"選択されたファイル: {os.path.basename(file_path)}")
@@ -190,7 +156,7 @@ class PyDiscussAssister:
             messagebox.showerror("エラー", "音声ファイルが選択されていません")
             return
 
-        if not self.check_ffmpeg():
+        if not self._check_ffmpeg():
             messagebox.showerror("エラー", "FFmpegがインストールされていないか、PATHに追加されていません。")
             return
 
@@ -216,14 +182,10 @@ class PyDiscussAssister:
             return
 
         default_filename = f"transcription_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
-        
-        file_path = filedialog.asksaveasfilename(
-            title="テキストファイルを保存",
-            defaultextension=".txt",
-            initialfile=default_filename,
-            filetypes=[("テキストファイル", "*.txt")]
-        )
-        
+        file_path = filedialog.asksaveasfilename(title="テキストファイルを保存",
+                                                 defaultextension=".txt",
+                                                 initialfile=default_filename,
+                                                 filetypes=[("テキストファイル", "*.txt")])
         if file_path:
             try:
                 with open(file_path, "w", encoding="utf-8") as f:
@@ -237,62 +199,43 @@ class PyDiscussAssister:
             messagebox.showerror("エラー", "削除するファイルが選択されていません")
             return
 
-        # 確認ダイアログを表示
-        confirm = messagebox.askyesno("確認", "本当にファイルを削除しますか？")
-        
-        if confirm:
+        if messagebox.askyesno("確認", "本当にファイルを削除しますか？"):
             try:
-                # ファイルが存在するディレクトリを取得
                 target_dir = os.path.dirname(self.current_audio_file)
-                
-                # ファイルを削除
                 if os.path.exists(self.current_audio_file):
                     os.remove(self.current_audio_file)
-                
-                # ディレクトリが空の場合、ディレクトリも削除
                 if not os.listdir(target_dir):
                     os.rmdir(target_dir)
-                
-                # 現在のファイル情報をクリア
+
                 self.current_audio_file = None
                 self.file_path_label.config(text="選択されたファイル: なし")
                 self.transcribe_button.config(state=tk.DISABLED)
                 self.save_button.config(state=tk.DISABLED)
                 self.result_text.delete(1.0, tk.END)
                 self.transcription_result = None
-                
+
                 messagebox.showinfo("成功", "ファイルを削除しました")
             except Exception as e:
                 messagebox.showerror("エラー", f"ファイルの削除中にエラーが発生しました: {str(e)}")
 
-    def check_ffmpeg(self):
+    def clear_all_records(self):
+        if messagebox.askyesno("確認", "本当に全ての録音ファイルを削除しますか？"):
+            try:
+                shutil.rmtree('records', ignore_errors=True)
+                os.mkdir('records')
+                messagebox.showinfo("成功", "全ての録音ファイルを削除しました")
+            except Exception as e:
+                messagebox.showerror("エラー", f"ファイルの削除中にエラーが発生しました: {str(e)}")
+
+    def _check_ffmpeg(self):
         try:
             subprocess.run(['ffmpeg', '-version'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
             return True
         except FileNotFoundError:
             return False
 
-    def clear_all_records(self):
-        # 確認ダイアログを表示
-        confirm = messagebox.askyesno("確認", "本当に全ての録音ファイルを削除しますか？")
-        
-        if confirm:
-            try:
-                target_dir = 'records'
-                if os.path.exists(target_dir):
-                    shutil.rmtree(target_dir)
-                    os.mkdir(target_dir)
-                    messagebox.showinfo("成功", "全ての録音ファイルを削除しました")
-                else:
-                    messagebox.showinfo("情報", "削除する録音ファイルはありません")
-            except Exception as e:
-                messagebox.showerror("エラー", f"ファイルの削除中にエラーが発生しました: {str(e)}")
 
 if __name__ == "__main__":
     root = tk.Tk()
     app = PyDiscussAssister(root)
     root.mainloop()
-
-    
-
-
