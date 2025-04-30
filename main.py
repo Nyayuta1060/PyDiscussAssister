@@ -57,14 +57,8 @@ class AppConfig:
 
 
 class AudioRecorder:
-    """
-    音声録音を管理するクラス
     
-    このクラスは以下の機能を提供します：
-    - 音声の録音開始/停止
-    - 録音データのWAVファイルへの保存
-    - 録音ディレクトリの管理
-    """
+    #音声録音を管理するクラス
     
     def __init__(self):
         """AudioRecorderの初期化"""
@@ -78,11 +72,9 @@ class AudioRecorder:
         os.makedirs(AppConfig.RECORDS_DIR, exist_ok=True)
 
     def start_recording(self):
-        """
-        録音を開始する
         
-        新しい録音スレッドを開始し、音声データの収集を開始します。
-        """
+        #録音を開始する
+      
         self.recording = True
         self.frames = []
         self.stream = self.p.open(format=self.FORMAT,
@@ -99,12 +91,9 @@ class AudioRecorder:
         self.recording_thread.start()
 
     def stop_recording(self):
-        """
-        録音を停止し、WAVファイルとして保存する
         
-        Returns:
-            str: 保存されたWAVファイルのパス
-        """
+        #録音を停止し、WAVファイルとして保存する
+  
         self.recording = False
         self.recording_thread.join()
         self.stream.stop_stream()
@@ -125,15 +114,9 @@ class AudioRecorder:
 
 
 class PyDiscussAssister:
-    """
-    音声録音と文字起こしを行うGUIアプリケーション
-    
-    このクラスは以下の機能を提供します：
-    - 音声の録音と保存
-    - 音声ファイルの文字起こし
-    - 文字起こし結果の保存
-    - ファイルの管理
-    """
+
+    #音声録音と文字起こしを行うGUIアプリケーション
+
     
     def __init__(self, root):
         """
@@ -157,14 +140,14 @@ class PyDiscussAssister:
         self._build_ui()
 
     def _set_icon(self):
-        """アプリケーションのアイコンを設定する"""
+        #アプリケーションのアイコンを設定する
         try:
             self.root.iconbitmap(AppConfig.ICON_PATH)
         except:
             messagebox.showwarning("警告", AppConfig.ErrorMessages.ICON_NOT_FOUND)
 
     def _build_ui(self):
-        """メインUIを構築する"""
+        #メインUIを構築
         self.main_frame = ttk.Frame(self.root, padding=AppConfig.UI.PADDING)
         self.main_frame.pack(fill=tk.BOTH, expand=True)
 
@@ -172,7 +155,7 @@ class PyDiscussAssister:
         self._build_transcribe_ui()
 
     def _build_record_ui(self):
-        """録音UIを構築する"""
+        #録音UIを構築
         frame = ttk.LabelFrame(self.main_frame, text="録音", padding=AppConfig.UI.PADDING)
         frame.pack(fill=tk.X, pady=5)
 
@@ -201,7 +184,7 @@ class PyDiscussAssister:
         self.status_label.pack(pady=5)
 
     def _build_transcribe_ui(self):
-        """文字起こしUIを構築する"""
+        #文字起こしUIを構築
         frame = ttk.LabelFrame(self.main_frame, text="文字起こし", padding=AppConfig.UI.PADDING)
         frame.pack(fill=tk.X, pady=5)
 
@@ -235,7 +218,7 @@ class PyDiscussAssister:
         self.result_text['yscrollcommand'] = scrollbar.set
 
     def toggle_recording(self):
-        """録音の開始/停止を切り替える"""
+        #録音の開始/停止を切り替え
         if not self.recorder.recording:
             self.recorder.start_recording()
             self.record_button.config(text="録音停止", bg=AppConfig.UI.RECORD_STOP_COLOR)
@@ -248,7 +231,7 @@ class PyDiscussAssister:
             self.transcribe_button.config(state=tk.NORMAL)
 
     def select_file(self):
-        """音声ファイルを選択する"""
+        #音声ファイルを選択
         file_path = filedialog.askopenfilename(
             title="音声ファイルを選択",
             filetypes=[("音声ファイル", "*.wav *.mp3 *.m4a")]
@@ -288,7 +271,7 @@ class PyDiscussAssister:
             messagebox.showerror("エラー", AppConfig.ErrorMessages.TRANSCRIPTION_ERROR.format(str(e)))
 
     def save_to_file(self):
-        """文字起こし結果をファイルに保存する"""
+        #文字起こし結果をファイルに保存
         if not self.transcription_result:
             messagebox.showerror("エラー", AppConfig.ErrorMessages.NO_TRANSCRIPTION)
             return
@@ -309,7 +292,7 @@ class PyDiscussAssister:
                 messagebox.showerror("エラー", AppConfig.ErrorMessages.SAVE_ERROR.format(str(e)))
 
     def delete_file(self):
-        """選択されたファイルを削除する"""
+        #選択されたファイルを削除
         if not self.current_audio_file:
             messagebox.showerror("エラー", AppConfig.ErrorMessages.NO_FILE_TO_DELETE)
             return
@@ -334,7 +317,7 @@ class PyDiscussAssister:
                 messagebox.showerror("エラー", AppConfig.ErrorMessages.DELETE_ERROR.format(str(e)))
 
     def clear_all_records(self):
-        """全ての録音ファイルを削除する"""
+        #全ての録音ファイルを削除
         if messagebox.askyesno("確認", AppConfig.ConfirmMessages.DELETE_ALL_RECORDS):
             try:
                 shutil.rmtree(AppConfig.RECORDS_DIR, ignore_errors=True)
@@ -344,7 +327,7 @@ class PyDiscussAssister:
                 messagebox.showerror("エラー", AppConfig.ErrorMessages.DELETE_ERROR.format(str(e)))
 
     def _check_ffmpeg(self):
-        """FFmpegが利用可能かチェックする"""
+        #FFmpegが利用可能かチェック
         try:
             subprocess.run(['ffmpeg', '-version'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
             return True
